@@ -1,0 +1,383 @@
+# Git know-how needed for Drill development
+
+## Drill git basics
+
+Drill is using the "_git_" source version control, stored online on a repository at [github.com](github.com) . That repository is called **upstream** (located at https://github.com/apache/drill ) Only few experienced developers (called _committers_) are allowed to modify the upstream. (Footnote: this github is actually a mirror of the "real" repo at git://git.apache.org/drill.git )
+
+Hence for keeping committed work online, you need to **_fork_** the upstream into your own online repository, called **origin** . This is done online at the [Apache Drill GitHub repository](https://github.com/apache/drill). The result would be located at `https://github.com/<developer-name>/drill` .
+
+Actual daily work would be done on the local workstations (PC or Mac) on yet another third repository; to get that local repository you need to **_clone_** your origin into a local directory, like:
+ * `$ mkdir ~/drill`
+ * `$ cd $/drill`
+ * `$ git clone https://github.com/<developer-name>/drill.git`
+  
+Note the distinction between the _local_ and the _remote_ repositories. All work committed locally is only saved at the local repository. To move that work to the origin, it has to be **_pushed_**. Similarly, to update the local repository with new changes added to the upstream, these changes have to be _**pulled**_.  
+
+Each repository has a default main branch called **master**. As a developers work on different tasks, they create new branches to isolate the work on each task. Like when fixing the bug DRILL-1234, a branch named DRILL-1234 is created and "checked out" (i.e. become current), then the following committed code changes are kept separately per that branch. Branches can be merged into other branches as needed.
+
+You would be working on the code locally in your _working copy_, and can modify files and build Drill as you wish. Before files can be committed, they have to be _added_ into a special **index** buffer (a.k.a _staging area_).   
+From Git's perspective, each file under the local _working copy_ can be in one of five states:
+ * (1) Untracked files: Newly created files, still unknown to Git.
+ * (2) Files changed but not "staged": Those are existing files you modified and saved in your editor.
+ * (3) "Staged" files: Files from the above (1)+(2) that were explicitly **_added_** to the Git _staging area_ - in preparation for a commit.
+ * (4) Committed files: Files from (3) that were explicitly committed (but not yet pushed to the origin).
+ * (5) Not modified: All the rest of the files.
+
+**Note**: When changing the current branch (i.e. "checking out" another branch) all the files of (1)+(2)+(3) states above **remain** under your Git directory !! So in order to fully switch context, you would need to commit all your work before checking out another branch !! (There is a workaround called "stash"; see below).
+
+ Eventually the committed work (after passing testing and reviews) would have to be _**pushed**_ up to your remote origin, and a "pull request" be made for one of the committers to pull the work from your origin into the upstream repository.
+
+ To perform Git tasks, you can either use Git command-line commands or a Git graphic tool.
+
+***
+
+
+## How do I do .... with Git command line
+
+Here are many common Git tasks you can do from the command line:
+
+### -- Do regular work
+Normally you would modify (or create or delete) files, then build and test. However at some point you would need to commit your work, that is staging the relevant files first, then committing them locally (with a commit message). The command `git add <files>` would stage those files, then `git commit` would commit them locally (would open your default editor for the message). You can also do `git commit -a` which would initially add all the modified/deleted files, then commit (notice it does not add newly created files!). 
+
+**Tips:** 1. `git add *` -- adds all the modified files.<BR>
+2. `git add --patch <SomeFile>` -- interactively select which modified hunks of this file to add, and which not to add (in case some modifications are not relevant for this commit).<BR>
+3. `git commit -m "this is a message"` -- Creates the commit message as part of the command (without opening the editor).
+
+### -- Switch to work on another branch
+`git checkout <branch-name>` -- Note that all (previously modified/added) uncommitted files remain in your work directory !!
+  One solution is `git stash` which keeps those files away (like: committed under a special branch); then when returning to the prior branch just restore the files with `git stash pop` .
+
+### -- Check the status of the local files
+`git status` -- is a straightforward command; it will describe all the files under states (1) (2) and (3) above, and tell you how to change their state. No note of files in the (4) state.
+
+### -- Check the status of locally committed files, not yet pushed to the origin
+The simplest way to get this list of files (Marked 'M' for modified, 'A' for newly added, 'D' for deleted) is with this alias:
+
+alias unpushed='git log origin/\`git name-rev --name-only HEAD\`.. --oneline --name-status'
+
+Note that this requires the origin to have a matching branch.
+
+### -- List the files modified between the current checked out branch and origin/master
+
+```
+git diff --name-only `git merge-base origin/master HEAD`
+```
+
+### -- List the files modified in a given commit
+
+( `<commit-id>` can also be HEAD, HEAD^, HEAD^^ etc. )
+
+  `git diff --name-status <COMMIT-ID>`
+
+Or display the log message along with the changed files:
+
+  `git log --name-status <COMMIT-ID>`
+
+Or simpler - define a git alias:
+
+  `git config --global alias.changed 'show --pretty="format:" --name-status'`
+
+then use like:
+
+  `git changed [ <commit-id> ]`
+
+### -- Revert a locally modified file (not yet added/staged)
+
+  `git checkout <file-name-path>`
+
+Restores the original file from the local git HEAD
+
+### -- Revert a file to an older version
+
+To revert a file to its version from a prior \<commit-id\> do
+
+  `git checkout <commit-id> <file-name-path>`
+
+### -- Undo added files
+
+The following unstages the file (no change to the file itself):
+
+  `git reset <file-name-path>`
+
+Or to undo all added/staged files:
+
+  `git reset` 
+
+### -- Uncommit committed files (not yet pushed)
+
+To undo the latest commit (modified files go back into the staging area):
+
+  `git reset --soft HEAD^`
+
+Or for the modified files to become unstaged:
+
+  `git reset HEAD^`
+
+Or to undo and get rid of all the modifications:
+
+  `git reset --hard HEAD^`
+
+### -- Amend the last commit (not yet pushed)
+
+If you want to modify the commit message of the last commit, or add a forgotten file, or both:
+
+  `git commit -m 'initial commit'`   
+  `git add forgot_this_file`   
+  `git commit --amend`
+
+### -- Amend a commit that was pushed
+
+If the last commit was already pushed, then amend the local commit (see above), followed by
+
+  `git push --force`
+ 
+### -- Undo a pull
+
+When code reviewing, you may pull to look at the proposed code changes.
+To undo this last pull do:
+
+  `git reset --hard HEAD@{1}`
+
+### -- Name a remote repository (like "upstream")
+
+First check which repositories are already defined:
+
+`git remote -v`
+
+An example output:
+
+```
+origin	https://github.com/Ben-Zvi/drill.git (fetch)   
+origin	https://github.com/Ben-Zvi/drill.git (push)   
+upstream	https://github.com/apache/drill.git (fetch)   
+upstream	https://github.com/apache/drill.git (push)   
+```
+
+If needed, then add the remote "upstream":
+
+`git remote add upstream https://github.com/apache/drill.git`
+
+### -- To update your master "origin" from master "upstream"
+
+First make sure that you're on your (local) master branch:
+
+`git checkout master`
+
+In case you have changed some files, then stash them temporarily:
+
+`git stash`
+
+Now just use these two:     
+
+`git pull upstream master`
+
+ followed by 
+
+`git push origin`
+
+(**Alternative:** (E.g. if want to examine the changes first) Fetch the remote upstream master into your local master:
+
+`git fetch upstream`
+
+Check the differences if needed:
+
+`git diff master origin/master`
+
+Rewrite your master branch so that any commits of yours that are not
+already in upstream/master are replayed on top of that other branch:
+
+`git rebase upstream/master`
+
+Need to push this to your forked remote "origin" on github; first time
+after a rebase you'd need to force the push:
+
+`git push -f origin master`
+
+**End of Alternative** )
+ 
+Last - if stashed, then restore the modified files:
+
+`git stash pop`
+
+### -- To update another branch (with changes)
+
+If you want to update an old branch "mybranch" that contains your work -- first update the master from upstream (see above), then:  
+
+`git checkout mybranch`           
+`git rebase master`              
+
+You may end up with conflicts -- these should be sorted out in your IDE; the conflicts are separated with     
+
+ <<<<<<         
+    new code from master ...     
+ =======    
+    changes from my branch ....    
+ \>\>\>\>\>\>     
+
+ After which you should do either <u> for every file </u> that you fixed:   
+
+`git add <path-to-my-file>`
+
+Or instead do once `git add -A` (the latter would also "cleanup" any conflict between a file modified in your branch, and deleted in master - but not the other way - in such a case need to do `git rm <file>` for that file) 
+
+Then continue the rebase:    
+`git rebase --continue`   
+
+The above "fix -> add -> rebase continue" cycle may need to be repeated several times (internally the rebase applies sequentially every commit in your branch).
+
+Once done, need to make the origin match (use force to match the history): `git push -f`
+
+### -- To "squash" multiple commits
+
+Often your work ends up with multiple commits, like
+
+_MyBranch:_  **prior_work--commit_1--commit_2--commit_3**
+
+(And the HEAD points to commit_3). Before submitting a pull request, you need to "squash" all your commits into a single commit.
+ 
+  NOTE: This would destroy your work history !! To preserve the history, first create a "backup branch" there, like: <BR> `git checkout -b MyBranch-backup` <BR> `git push --set-upstream origin MyBranch-backup` <BR> `git checkout MyBranch`
+
+  A simple way to squash is: Move the HEAD back, then apply all the commits above the HEAD as a single commit (note: you'd have to rewrite the commit message):
+
+`git reset --soft <SHA1 for prior_work>`
+
+`git commit`
+
+And last: `git push -f`
+
+(Note: If you need to both squash and update your branch to the latest, then do the squash first, then rebase; the rebase does not add a commit to require another squash).
+
+### -- An alternative way to squash (and/or reorder commits)
+
+An alternative more complex way to squash, which helps preserve the commit message(s) and the original author of commit_1 (when squashing another author's commits), is by an interactive rebasing:
+
+`git rebase -i <SHA1 for prior_work>`
+
+This opens the interactive editor with something like:
+
+`pick <SHA1 for commit_1> Comment for commit_1`<BR>
+`pick <SHA1 for commit_2> Comment for commit_2`<BR>
+`pick <SHA1 for commit_3> Comment for commit_3`<BR>
+
+Then you'd replace the latter two "pick"s with "squash":
+
+`pick <SHA1 for commit_1> Comment for commit_1`<BR>
+`squash <SHA1 for commit_2> Comment for commit_2`<BR>
+`squash <SHA1 for commit_3> Comment for commit_3`<BR>
+
+and save/exit to perform the squash. The editor then would pop again and allow you to further modify the comments as needed.
+
+NOTE: The above also allows to reorder the commits. E.g., suppose you want to squash commit_1 and commit_3, but leave commit_2 alone, then just swap the first two (assuming there is no conflict!), and then squash:
+
+`pick <SHA1 for commit_2> Comment for commit_2`<BR>
+`pick <SHA1 for commit_1> Comment for commit_1`<BR>
+`squash <SHA1 for commit_3> Comment for commit_3`<BR>
+
+LAST: If the rebase got messed up (e.g. due to conflicts), just undo it with `git rebase --abort`
+
+### -- To copy changes from one branch to another
+
+To add the changes on top of the HEAD of the target branch, first find the commit Before_SHA and After_SHA in the "source branch", then:
+
+`git checkout <Target_Branch>`
+
+`git diff <Before_SHA> <After_SHA> | git apply`
+
+### -- To rename a branch
+
+1. Rename your local branch
+
+If you are on the branch you want to rename:
+
+`git branch -m new-name`
+
+If you are on a different branch:
+
+`git branch -m old-name new-name`
+
+2. Delete the old-name remote branch and push the new-name local branch
+
+`git push origin :old-name new-name`
+
+3. Reset the upstream branch for the new-name local branch
+
+`git push origin -u new-name`
+
+### -- To delete a branch
+
+Once a branch is not needed anymore, like finished working on DRILL-6685:
+
+0. First checkout another branch:
+
+`git checkout master`
+
+1. Delete the local branch:
+
+`git branch -D DRILL-6685`
+
+2. Delete the remote (at origin) branch:
+
+`git push origin --delete DRILL-6685`
+
+### -- To list the creation time of branches
+
+When cleaning up old branches, you may want to know the creation time of your branches. Here is a command that lists all branches, each with its creation time:
+
+`git branch | { while read branch; do merge_base=$(git merge-base --all $branch master); date_branched=$(git show -s --format=format:%ci $merge_base); echo "$branch: $date_branched"; done }`
+
+### -- To see local-remote branch tracking, and prune local stale branches
+
+To see all the remote branches that are tracked, and the local ones - each to which remote one it pushes, and the local stale ones:
+
+`git remote show origin`
+
+And to see only the stale ones (remove the dry-run to actually perform the pruning):
+
+`git remote prune origin --dry-run`
+
+***
+
+## Graphic Git tools
+
+Many tool are available. The most popular here is SourceTree . Also there is GitKraken.
+
+Advantages of SourceTree: Shows the diff by default (that's all you need for a small change).
+
+Advantages of GitKraken:   
+1. Can stage specific parts of a file (as opposed to the whole file).    
+2. 
+
+## Miscellaneous 
+
+### A git tutorial
+
+`git help tutorial`
+
+### Enable git command auto-completion
+
+Google for the file  `git-completion.bash` , download and put it (e.g.) under ~/
+
+Then add as the **last line** in your ~/.bashrc :
+
+ `source ~/git-completion.bash`
+
+### Garbage collection
+After a long time of using a repository, garbage is accumulated there (e.g., after an amended commit, the original commit is still kept). To see the level of garbage do:
+
+`git count-objects -v`
+
+To collect that garbage (may be needed once a year or so), do
+
+`git gc --aggressive`
+
+###  To build git on a Linux VM
+
+First do
+
+ `sudo yum install curl-devel expat-devel gettext-devel openssl-devel zlib-devel`
+
+Afterwards download the tar, then untar and:
+
+`./configure`   
+`make`   
+`sudo make prefix=/usr/local install`   
