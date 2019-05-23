@@ -1,0 +1,58 @@
+Here is an example for an Apache Drill commit, performed by github user "ben-zvi" (Apache email boaz@apache.org).
+
+Before the first time, the following steps need to be done (only once):
+
+* Link your GitHub and Apache accounts. 
+  * Login to your Apache account here (https://id.apache.org/) and add your GitHub account ID. 
+  * Wait for an automated ASF invite to your GitHub account (may take a couple of hours). Accept the invite.
+  * Setup/enable two-factor authentication in your GitHub account.
+  * Go to GitBox here (https://gitbox.apache.org/setup/) and link both accounts. Wait for ENABLED MFA status.
+  * Generate SSH keys if not already present. Copy the public key (id_rsa.pub) to your GitHub account.
+* Set your apache email to forward to your mapr email (the change may take effect after several hours)
+* `git config --global user.email boaz@apache.org`
+* `git config --global user.name "Boaz Ben-Zvi"`
+* `git config --global branch.autosetuprebase always`
+* (OBSOLETE - May 2018 - not using this apache server anymore) <BR> `git remote add apache https://git-wip-us.apache.org/repos/asf/drill.git`
+* Assumed that your remotes `upstream` and `origin` are already set (see [this](https://github.com/mapr/private-drill/wiki/Git-for-Drill-developers)), like:<br>
+`> git remote -v` <br>
+`origin	https://github.com/Ben-Zvi/drill.git (fetch)`<br>
+`origin	https://github.com/Ben-Zvi/drill.git (push)`<br>
+`upstream	https://github.com/apache/drill.git (fetch)`<br>
+`upstream	https://github.com/apache/drill.git (push)`<br>
+* (OBSOLETE - May 2018) <BR> (Mac OS only) To avoid needing user/password for pushing into apache: <br>
+`git config --global credential.helper osxkeychain` <br>
+and setup a ~/.netrc file that contains your user credentials:<br>
+```
+  $ (umask 0277; cat >> ~/.netrc <<EOF)
+  machine git-wip-us.apache.org
+  login myusername
+  password mypassword
+  EOF
+  chmod 0600 ~/.netrc
+```
+
+Checking in a single commit: DRILL-6071 = PR#1091 . From the PR's web page get the user-name (ppadma), the branch name (DRILL-6071), and the commit id SHA (5889876). Then do in your repo:
+
+* If need to keep uncommitted local work: `git stash`
+* `git checkout master`
+* `git pull upstream master` - update to the latest apache
+* (optional) `git push origin` - update your origin master
+* `git checkout -b MERGE-180130-01` - create a unique merge branch, by date and enum
+* To help with future commits, create a remote for that user: <br> `git remote add padma https://github.com/ppadma/drill.git` <br> (else need to type the whole URL in the fetch command).
+* **Fetch** the commit's branch's information: `git fetch padma DRILL-6071`
+* **Cherry-pick** the commit into the new branch: <br> `git cherry-pick 5889876a975d20b60ffc750a33ec98516b13359b`<br> (In case there are multiple commits, cherry-pick each of them and squash later).
+* **Update** the commit message so its bottom line would be "closes #1091" (without the quotes). Can use `git commit --amend` to edit and change the latest commit message.<br> Also ensure that the commit message starts with the Jira number, like:<br> "DRILL-6071: blah blah ..."<br>(If there were multiple commits, then can add the "closes" line as part of [squashing](https://github.com/mapr/private-drill/wiki/Git-for-Drill-developers#---an-alternative-way-to-squash).)
+* If batch committing, jump back to **Fetch** to handle the next Pull Request. Else continue.
+* Push the new branch into the origin: `git push origin MERGE-180130-01`
+* Get the branch's new SHA (e.g. `git log | head`) - <br> `commit 039530a4195ba8fa4532b9ca92980206fa66c181`
+* Use that SHA to run the Jenkins tests. May take up to an hour or two. Ignore random failures.
+* If there are failures, either fix them or ask the PR's user for help.
+* If the tests passed - rebase your master and push to apache (i.e., upstream):
+  - `git checkout master`
+  - `git rebase MERGE-180130-01`
+  - `git push upstream master`
+* The previous step should automatically close all the PRs (using those "closes #1091" lines).
+* Need to manually close/resolve each of the Jiras. In this process please add the commit ID in the comment section, like "Merged with commit ID 039530a4195ba8fa4532b9ca92980206fa66c181". 
+
+ DONE !! <br> 
+
